@@ -33,38 +33,6 @@ defmodule LoggerJSONFileBackendTest do
     assert json_log["foo"]["bar"] == ["baz"]
   end
 
-  test "use another encoder" do
-    config [path: "test/logs/test.log", level: :info, json_encoder: Poison, metadata: [:foo]]
-    Logger.info("msg body", [foo: "bar", baz: []])
-    json_log = Poison.decode! log()
-    assert json_log["level"] == "info"
-    assert json_log["message"] == "msg body"
-    assert Regex.match?(~r/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}/, json_log["time"])
-    assert json_log["foo"] == "bar"
-    assert is_nil(json_log["baz"])
-  end
-
-  test "doesn't trim metadata" do
-    config [path: "test/logs/test.log", level: :info, json_encoder: Poison, metadata_triming: false, metadata: [:foo]]
-    Logger.info("msg body", [foo: "bar", baz: %{hoge: 1, fuga: 2}])
-    json_log = Poison.decode! log()
-    assert json_log["level"] == "info"
-    assert json_log["message"] == "msg body"
-    assert Regex.match?(~r/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}/, json_log["time"])
-    assert json_log["foo"] == "bar"
-    assert json_log["baz"] == %{"hoge" => 1, "fuga" => 2}
-    assert not Map.has_key?(json_log, :pid)
-  end
-
-  test "add uuid" do
-    config [path: "test/logs/test.log", level: :info, uuid: true]
-    Logger.info("msg body", [foo: "bar", baz: %{hoge: 1, fuga: 2}])
-    json_log = Jason.decode! log()
-    assert json_log["level"] == "info"
-    assert json_log["message"] == "msg body"
-    assert Regex.match?(~r/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}/, json_log["time"])
-    assert Map.has_key?(json_log, "uuid")
-  end
 
   test "message should be string" do
     Logger.info(["msg", 32, "body"])

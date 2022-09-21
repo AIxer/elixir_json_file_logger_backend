@@ -1,8 +1,7 @@
 defmodule LoggerJSONFileBackend do
   @behaviour :gen_event
 
-  @macro_env_fields [:pid] ++ Map.keys(%Macro.Env{})
-  @formatter if Version.compare(System.version(), "1.6.0") == :lt, do: Logger.Utils, else: Logger.Formatter
+  alias Logger.Formatter
 
   @impl :gen_event
   def init({__MODULE__, name}) do
@@ -57,14 +56,10 @@ defmodule LoggerJSONFileBackend do
     end
   end
 
-  defp log_event(level, msg, ts, md, %{path: path, io_device: io_device, inode: inode, metadata: keys, json_encoder: json_encoder, triming: triming, uuid: uuid}=state) when is_binary(path) do
+  defp log_event(level, msg, ts, md, %{path: path, io_device: io_device, inode: inode, metadata: keys}=state) when is_binary(path) do
     if !is_nil(inode) and inode == inode(path) do
-      message = case uuid do
-        true ->
-          json_encoder.encode!(Map.merge(%{level: level, uuid: UUID.uuid4(), message: (msg |> IO.iodata_to_binary), time: format_time(ts)}, take_metadata(md, keys, triming))) <> "\n"
-        false ->
-          json_encoder.encode!(Map.merge(%{level: level, message: (msg |> IO.iodata_to_binary), time: format_time(ts)}, take_metadata(md, keys, triming))) <> "\n"
-      end
+      message =
+          Jason.encode!(Map.merge(%{level: level, message: (msg |> IO.iodata_to_binary), time: format_time(ts)}, take_metadata(md, keys))) <> "\n"
       IO.write(io_device, message)
       {:ok, state}
     else
@@ -74,20 +69,16 @@ defmodule LoggerJSONFileBackend do
   end
 
   defp format_time({date, time}) do
-    [@formatter.format_date(date), @formatter.format_time(time)]
+    [Formatter.format_date(date), Formatter.format_time(time)]
     |> Enum.map(&IO.iodata_to_binary/1)
     |> Enum.join(" ")
   end
 
-  defp take_metadata(metadata, _keys, false) do
-    reject_keys = @macro_env_fields
-    metadata |> Keyword.drop(reject_keys) |> Enum.into(%{})
-  end
-  defp take_metadata(metadata, keys, true) do
+  defp take_metadata(metadata, keys) do
     List.foldr keys, %{}, fn key, acc ->
       case Keyword.fetch(metadata, key) do
         {:ok, val} ->
-          if key == :pid do
+          if is_pid(val) do
             Map.merge(acc, %{key => inspect(val)})
           else
             Map.merge(acc, %{key => val})
@@ -100,7 +91,7 @@ defmodule LoggerJSONFileBackend do
   defp open_log(path) do
     case (path |> Path.dirname |> File.mkdir_p) do
       :ok ->
-        case File.open(path, [:append, :utf8]) do
+        case File.open(path, [:append, :binary, :utf8]) do
           {:ok, io_device} ->
             {:ok, io_device, inode(path)}
           other -> other
@@ -117,7 +108,7 @@ defmodule LoggerJSONFileBackend do
   end
 
   defp configure(name, opts) do
-    state = %{name: nil, path: nil, io_device: nil, inode: nil, level: nil, metadata: nil, json_encoder: nil, triming: false, uuid: false}
+    state = %{name: nil, path: nil, io_device: nil, inode: nil, level: nil, metadata: nil}
     configure(name, opts, state)
   end
 
@@ -126,13 +117,10 @@ defmodule LoggerJSONFileBackend do
     opts = Keyword.merge(env, opts)
     Application.put_env(:logger, name, opts)
 
-    level        = Keyword.get(opts, :level, :info)
+    level        = Keyword.get(opts, :level, :debug)
     metadata     = Keyword.get(opts, :metadata, [])
     path         = Keyword.get(opts, :path)
-    json_encoder = Keyword.get(opts, :json_encoder, Jason)
-    triming      = Keyword.get(opts, :metadata_triming, true)
-    uuid         = Keyword.get(opts, :uuid, false)
 
-    %{state | name: name, path: path, level: level, metadata: metadata, json_encoder: json_encoder, triming: triming, uuid: uuid}
+    %{state | name: name, path: path, level: level, metadata: metadata}
   end
 end
