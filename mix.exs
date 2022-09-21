@@ -19,12 +19,4 @@ defmodule LoggerJSONFileBackend.Mixfile do
       {:jason, "~> 1.4"}
     ]
   end
-
-  defp package do
-    [
-      maintainers: ["Hidetaka Kojo", "Lei Yuan", "Hiroaki Murayama"],
-      licenses: ["ISC"],
-      links: %{"GitHub" => "https://github.com/xflagstudio/elixir_logger_json_file_backend"}
-    ]
-  end
 end
